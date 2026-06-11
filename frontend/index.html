@@ -178,7 +178,7 @@
       const lc = LEAN_COLORS[lean] || LEAN_COLORS.center;
       dot.className = `lean-dot ${lc.bg}`;
       dot.title = lc.label;
-      [dotsContainer.app](https://dotsContainer.app)endChild(dot);
+      dotsContainer.appendChild(dot);
     });
 
     const perspList = card.querySelector('.perspectives-list');
@@ -190,7 +190,7 @@
         <span class="flex-shrink-0 mt-1 lean-dot ${lc.bg}"></span>
         <p class="text-sm text-gray-600"><span class="font-medium ${lc.text}">${lc.label}:</span> ${p.framing}</p>
       `;
-      [perspList.app](https://perspList.app)endChild(div);
+      perspList.appendChild(div);
     });
 
     card.querySelector('.divergence-text').textContent = story.key_divergence;
@@ -204,7 +204,7 @@
       a.rel = 'noopener noreferrer';
       a.className = `flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 bg-gray-50 px-2 py-1 rounded hover:bg-gray-100 transition-colors`;
       a.innerHTML = `<span class="lean-dot ${lc.bg} flex-shrink-0"></span>${src.name}`;
-      [sourcesList.app](https://sourcesList.app)endChild(a);
+      sourcesList.appendChild(a);
     });
 
     return card;
@@ -222,7 +222,7 @@
     if (stories.length === 0) {
       grid.innerHTML = `<p class="text-center text-gray-400 py-12">No ${activeGenre} stories in this edition.</p>`;
     } else {
-      stories.forEach(story => [grid.app](https://grid.app)endChild(renderStory(story)));
+      stories.forEach(story => grid.appendChild(renderStory(story)));
     }
 
     document.getElementById('last-updated').textContent = `Updated ${timeAgo(edition.run_at)}`;
