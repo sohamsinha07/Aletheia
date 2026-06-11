@@ -1,0 +1,74 @@
+{
+  "sources": [
+    {
+      "name": "Reuters",
+      "domain": "[reuters.com](https://reuters.com)",
+      "lean": "center",
+      "lean_score": 0,
+      "rss": "https://feeds.reuters.com/reuters/topNews"
+    },
+    {
+      "name": "Associated Press",
+      "domain": "[apnews.com](https://apnews.com)",
+      "lean": "center",
+      "lean_score": 0,
+      "rss": "https://rsshub.app/apnews/topics/apf-topnews"
+    },
+    {
+      "name": "NPR",
+      "domain": "[npr.org](https://npr.org)",
+      "lean": "lean_left",
+      "lean_score": -1,
+      "rss": "https://feeds.npr.org/1001/rss.xml"
+    },
+    {
+      "name": "The Guardian",
+      "domain": "[theguardian.com](https://theguardian.com)",
+      "lean": "left",
+      "lean_score": -2,
+      "rss": "https://www.theguardian.com/world/rss"
+    },
+    {
+      "name": "BBC News",
+      "domain": "[bbc.com](https://bbc.com)",
+      "lean": "lean_left",
+      "lean_score": -1,
+      "rss": "http://feeds.bbci.co.uk/news/rss.xml"
+    },
+    {
+      "name": "The Hill",
+      "domain": "[thehill.com](https://thehill.com)",
+      "lean": "center",
+      "lean_score": 0,
+      "rss": "https://thehill.com/feed/"
+    },
+    {
+      "name": "Fox News",
+      "domain": "[foxnews.com](https://foxnews.com)",
+      "lean": "right",
+      "lean_score": 2,
+      "rss": "https://moxie.foxnews.com/google-publisher/latest.xml"
+    },
+    {
+      "name": "The Washington Times",
+      "domain": "[washingtontimes.com](https://washingtontimes.com)",
+      "lean": "lean_right",
+      "lean_score": 1,
+      "rss": "https://www.washingtontimes.com/rss/headlines/news/"
+    },
+    {
+      "name": "Axios",
+      "domain": "[axios.com](https://axios.com)",
+      "lean": "center",
+      "lean_score": 0,
+      "rss": "https://api.axios.com/feed/"
+    },
+    {
+      "name": "Politico",
+      "domain": "[politico.com](https://politico.com)",
+      "lean": "lean_left",
+      "lean_score": -1,
+      "rss": "https://www.politico.com/rss/politicopicks.xml"
+    }
+  ]
+}

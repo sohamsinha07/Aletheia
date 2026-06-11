@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NewsLens — Multi-Perspective News Digest</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            left:      '#3b82f6',
+            lean_left: '#93c5fd',
+            center:    '#6b7280',
+            lean_right:'#fca5a5',
+            right:     '#ef4444',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .masthead { font-family: 'Playfair Display', serif; }
+    .lean-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .story-card { transition: box-shadow 0.15s; }
+    .story-card:hover { box-shadow: 0 4px 24px rgba(0,0,0,0.10); }
+    .genre-pill { font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; }
+    .spectrum-bar { height: 6px; border-radius: 3px; background: linear-gradient(90deg, #3b82f6 0%, #93c5fd 25%, #6b7280 50%, #fca5a5 75%, #ef4444 100%); }
+    .spinner { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .fade-in { animation: fadeIn 0.4s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<header class="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+  <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div>
+      <h1 class="masthead text-2xl text-gray-900">NewsLens</h1>
+      <p class="text-xs text-gray-400 -mt-1">Every story, every angle.</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="last-updated" class="text-xs text-gray-400"></span>
+      <button id="refresh-btn"
+        class="flex items-center gap-2 bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+        <svg id="refresh-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        <span id="refresh-label">Refresh</span>
+      </button>
+    </div>
+  </div>
+  <div class="max-w-5xl mx-auto px-4 pb-3 flex gap-2 flex-wrap" id="genre-filters">
+    <button class="genre-pill bg-gray-900 text-white px-3 py-1 rounded-full font-medium" data-genre="all">All</button>
+    <button class="genre-pill bg-gray-100 text-gray-600 px-3 py-1 rounded-full font-medium hover:bg-gray-200" data-genre="politics">Politics</button>
+    <button class="genre-pill bg-gray-100 text-gray-600 px-3 py-1 rounded-full font-medium hover:bg-gray-200" data-genre="economy">Economy</button>
+    <button class="genre-pill bg-gray-100 text-gray-600 px-3 py-1 rounded-full font-medium hover:bg-gray-200" data-genre="tech">Tech</button>
+    <button class="genre-pill bg-gray-100 text-gray-600 px-3 py-1 rounded-full font-medium hover:bg-gray-200" data-genre="world">World</button>
+    <button class="genre-pill bg-gray-100 text-gray-600 px-3 py-1 rounded-full font-medium hover:bg-gray-200" data-genre="health">Health</button>
+    <button class="genre-pill bg-gray-100 text-gray-600 px-3 py-1 rounded-full font-medium hover:bg-gray-200" data-genre="climate">Climate</button>
+    <button class="genre-pill bg-gray-100 text-gray-600 px-3 py-1 rounded-full font-medium hover:bg-gray-200" data-genre="business">Business</button>
+    <button class="genre-pill bg-gray-100 text-gray-600 px-3 py-1 rounded-full font-medium hover:bg-gray-200" data-genre="science">Science</button>
+  </div>
+</header>
+
+<div class="max-w-5xl mx-auto px-4 pt-4 pb-2 flex items-center gap-4">
+  <div class="spectrum-bar flex-1"></div>
+  <div class="flex gap-3 text-xs text-gray-400 flex-shrink-0">
+    <span><span class="lean-dot bg-blue-500 mr-1"></span>Left</span>
+    <span><span class="lean-dot bg-blue-300 mr-1"></span>Lean Left</span>
+    <span><span class="lean-dot bg-gray-500 mr-1"></span>Center</span>
+    <span><span class="lean-dot bg-red-300 mr-1"></span>Lean Right</span>
+    <span><span class="lean-dot bg-red-500 mr-1"></span>Right</span>
+  </div>
+</div>
+
+<main class="max-w-5xl mx-auto px-4 py-4" id="main-content">
+  <div id="loading-state" class="text-center py-16">
+    <svg class="spinner w-8 h-8 text-gray-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+    </svg>
+    <p class="text-gray-400 text-sm" id="loading-text">Loading latest edition…</p>
+  </div>
+  <div id="error-state" class="hidden text-center py-16">
+    <p class="text-gray-500 text-base mb-2" id="error-message">No edition found.</p>
+    <p class="text-gray-400 text-sm">Click Refresh to run the pipeline for the first time.</p>
+  </div>
+  <div id="stories-grid" class="hidden space-y-5 fade-in"></div>
+</main>
+
+<template id="story-template">
+  <article class="story-card bg-white rounded-xl border border-gray-200 p-5 fade-in">
+    <div class="flex items-start justify-between gap-3 mb-3">
+      <div class="flex items-center gap-2">
+        <span class="genre-label genre-pill bg-blue-50 text-blue-600 px-2 py-0.5 rounded"></span>
+        <span class="count-label text-xs text-gray-400"></span>
+      </div>
+      <div class="source-dots flex gap-1 flex-wrap justify-end"></div>
+    </div>
+    <h2 class="story-headline text-lg font-semibold text-gray-900 leading-snug mb-2"></h2>
+    <p class="story-summary text-sm text-gray-600 leading-relaxed mb-4"></p>
+    <div class="perspectives-section mb-4">
+      <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">How it's being covered</h3>
+      <div class="perspectives-list space-y-2"></div>
+    </div>
+    <div class="divergence-section border-t border-gray-100 pt-3">
+      <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Key divergence</h3>
+      <p class="divergence-text text-sm text-gray-600 italic"></p>
+    </div>
+    <div class="sources-section mt-3 border-t border-gray-100 pt-3">
+      <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Read the coverage</h3>
+      <div class="sources-list flex flex-wrap gap-2"></div>
+    </div>
+  </article>
+</template>
+
+<script>
+  const API_BASE = 'http://localhost:8000';
+  let currentEdition = null;
+  let activeGenre = 'all';
+  let pollInterval = null;
+
+  const LEAN_COLORS = {
+    left:       { bg: 'bg-blue-500',  text: 'text-blue-600',  label: 'Left' },
+    lean_left:  { bg: 'bg-blue-300',  text: 'text-blue-400',  label: 'Lean Left' },
+    center:     { bg: 'bg-gray-500',  text: 'text-gray-500',  label: 'Center' },
+    lean_right: { bg: 'bg-red-300',   text: 'text-red-400',   label: 'Lean Right' },
+    right:      { bg: 'bg-red-500',   text: 'text-red-600',   label: 'Right' },
+  };
+
+  const GENRE_COLORS = {
+    politics: 'bg-purple-50 text-purple-600',
+    economy:  'bg-green-50 text-green-600',
+    tech:     'bg-blue-50 text-blue-600',
+    world:    'bg-orange-50 text-orange-600',
+    health:   'bg-pink-50 text-pink-600',
+    climate:  'bg-teal-50 text-teal-600',
+    business: 'bg-yellow-50 text-yellow-700',
+    science:  'bg-indigo-50 text-indigo-600',
+    general:  'bg-gray-50 text-gray-600',
+  };
+
+  function timeAgo(isoString) {
+    const diff = Date.now() - new Date(isoString).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  }
+
+  function renderStory(story) {
+    const tmpl = document.getElementById('story-template');
+    const card = tmpl.content.cloneNode(true).querySelector('article');
+
+    const genreLabel = card.querySelector('.genre-label');
+    const gColors = GENRE_COLORS[story.genre] || GENRE_COLORS.general;
+    genreLabel.className = `genre-label genre-pill ${gColors} px-2 py-0.5 rounded`;
+    genreLabel.textContent = story.genre;
+    card.dataset.genre = story.genre;
+
+    card.querySelector('.count-label').textContent = `${story.article_count} source${story.article_count !== 1 ? 's' : ''}`;
+    card.querySelector('.story-headline').textContent = story.headline;
+    card.querySelector('.story-summary').textContent = story.summary;
+
+    const dotsContainer = card.querySelector('.source-dots');
+    const uniqueLeans = [...new Set(story.sources.map(s => s.lean))];
+    uniqueLeans.forEach(lean => {
+      const dot = document.createElement('span');
+      const lc = LEAN_COLORS[lean] || LEAN_COLORS.center;
+      dot.className = `lean-dot ${lc.bg}`;
+      dot.title = lc.label;
+      [dotsContainer.app](https://dotsContainer.app)endChild(dot);
+    });
+
+    const perspList = card.querySelector('.perspectives-list');
+    (story.perspectives || []).forEach(p => {
+      const lc = LEAN_COLORS[p.lean] || LEAN_COLORS.center;
+      const div = document.createElement('div');
+      div.className = 'flex gap-2 items-start';
+      div.innerHTML = `
+        <span class="flex-shrink-0 mt-1 lean-dot ${lc.bg}"></span>
+        <p class="text-sm text-gray-600"><span class="font-medium ${lc.text}">${lc.label}:</span> ${p.framing}</p>
+      `;
+      [perspList.app](https://perspList.app)endChild(div);
+    });
+
+    card.querySelector('.divergence-text').textContent = story.key_divergence;
+
+    const sourcesList = card.querySelector('.sources-list');
+    story.sources.forEach(src => {
+      const lc = LEAN_COLORS[src.lean] || LEAN_COLORS.center;
+      const a = document.createElement('a');
+      a.href = src.url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.className = `flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 bg-gray-50 px-2 py-1 rounded hover:bg-gray-100 transition-colors`;
+      a.innerHTML = `<span class="lean-dot ${lc.bg} flex-shrink-0"></span>${src.name}`;
+      [sourcesList.app](https://sourcesList.app)endChild(a);
+    });
+
+    return card;
+  }
+
+  function renderEdition(edition) {
+    currentEdition = edition;
+    const grid = document.getElementById('stories-grid');
+    grid.innerHTML = '';
+
+    const stories = activeGenre === 'all'
+      ? edition.stories
+      : edition.stories.filter(s => s.genre === activeGenre);
+
+    if (stories.length === 0) {
+      grid.innerHTML = `<p class="text-center text-gray-400 py-12">No ${activeGenre} stories in this edition.</p>`;
+    } else {
+      stories.forEach(story => [grid.app](https://grid.app)endChild(renderStory(story)));
+    }
+
+    document.getElementById('last-updated').textContent = `Updated ${timeAgo(edition.run_at)}`;
+    document.getElementById('loading-state').classList.add('hidden');
+    document.getElementById('error-state').classList.add('hidden');
+    grid.classList.remove('hidden');
+  }
+
+  function showError(msg) {
+    document.getElementById('loading-state').classList.add('hidden');
+    document.getElementById('stories-grid').classList.add('hidden');
+    document.getElementById('error-message').textContent = msg;
+    document.getElementById('error-state').classList.remove('hidden');
+  }
+
+  async function loadLatestEdition() {
+    try {
+      const res = await fetch(`${API_BASE}/api/edition/latest`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const edition = await res.json();
+      renderEdition(edition);
+    } catch (e) {
+      showError('No edition found — run the pipeline to generate your first digest.');
+    }
+  }
+
+  function setRefreshState(running) {
+    const btn = document.getElementById('refresh-btn');
+    const icon = document.getElementById('refresh-icon');
+    const label = document.getElementById('refresh-label');
+    btn.disabled = running;
+    if (running) {
+      icon.classList.add('spinner');
+      label.textContent = 'Running…';
+      document.getElementById('last-updated').textContent = 'Pipeline running…';
+    } else {
+      icon.classList.remove('spinner');
+      label.textContent = 'Refresh';
+    }
+  }
+
+  async function startPipeline() {
+    setRefreshState(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/pipeline/run`, { method: 'POST' });
+      const data = await res.json();
+      pollInterval = setInterval(async () => {
+        const statusRes = await fetch(`${API_BASE}/api/pipeline/status`);
+        const status = await statusRes.json();
+        if (!status.running) {
+          clearInterval(pollInterval);
+          setRefreshState(false);
+          if (status.last_error) {
+            alert(`Pipeline error: ${status.last_error}`);
+          } else {
+            await loadLatestEdition();
+          }
+        }
+      }, 3000);
+    } catch (e) {
+      setRefreshState(false);
+      alert('Could not connect to the backend. Make sure the API is running.');
+    }
+  }
+
+  document.getElementById('genre-filters').addEventListener('click', e => {
+    const btn = e.target.closest('[data-genre]');
+    if (!btn) return;
+    activeGenre = btn.dataset.genre;
+    document.querySelectorAll('[data-genre]').forEach(b => {
+      b.className = b.dataset.genre === activeGenre
+        ? 'genre-pill bg-gray-900 text-white px-3 py-1 rounded-full font-medium'
+        : 'genre-pill bg-gray-100 text-gray-600 px-3 py-1 rounded-full font-medium hover:bg-gray-200';
+    });
+    if (currentEdition) renderEdition(currentEdition);
+  });
+
+  document.getElementById('refresh-btn').addEventListener('click', startPipeline);
+
+  loadLatestEdition();
+
+  fetch(`${API_BASE}/api/pipeline/status`)
+    .then(r => r.json())
+    .then(status => {
+      if (status.running) {
+        setRefreshState(true);
+        pollInterval = setInterval(async () => {
+          const statusRes = await fetch(`${API_BASE}/api/pipeline/status`);
+          const s = await statusRes.json();
+          if (!s.running) {
+            clearInterval(pollInterval);
+            setRefreshState(false);
+            await loadLatestEdition();
+          }
+        }, 3000);
+      }
+    }).catch(() => {});
+</script>
+</body>
+</html>
