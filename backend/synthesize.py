@@ -1,22 +1,20 @@
 """
 synthesize.py — Step 3 of the NewsLens pipeline.
-For each story cluster, makes one LLM call to produce a multi-perspective
-synthesis: shared facts + where left/right coverage diverges.
+Guarantees coverage across all genres before filling remaining slots
+with the largest multi-source clusters.
 """
 
 import os
 import json
 from dotenv import load_dotenv
-
 load_dotenv()
 
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-MAX_CLUSTERS = int(os.getenv("MAX_CLUSTERS", "10"))
-MIN_CLUSTER_SIZE = int(os.getenv("MIN_CLUSTER_SIZE", "2"))
-
+MAX_CLUSTERS = int(os.getenv("MAX_CLUSTERS", "25"))
+MIN_STORIES_PER_GENRE = int(os.getenv("MIN_STORIES_PER_GENRE", "2"))
 
 LEAN_LABELS = {
     "left": "Left-leaning",
@@ -26,16 +24,19 @@ LEAN_LABELS = {
     "right": "Right-leaning",
 }
 
+ALL_GENRES = ["politics", "economy", "tech", "world", "health", "climate", "business", "science"]
+
 SYNTHESIS_PROMPT = """You are a professional news editor producing a multi-perspective digest.
-You will receive several articles about the same news story from sources across the political spectrum.
+You will receive one or more articles about a news story, potentially from sources across the political spectrum.
 Your job is to produce a fair, grounded synthesis.
 
 RULES:
 1. Only use facts stated in the provided articles. Do NOT add outside knowledge.
 2. Do not express your own opinion or take sides.
 3. Be concise. The digest reader wants the key facts fast.
-4. When coverage diverges, describe the divergence neutrally — "Left-leaning outlets emphasize X, while right-leaning outlets emphasize Y."
+4. When coverage diverges, describe the divergence neutrally.
 5. Always cite the source name when attributing a specific framing or claim.
+6. If only one source is provided, write the summary from that source and note in key_divergence that only one source covered this story.
 
 OUTPUT FORMAT (JSON only, no markdown):
 {
@@ -44,10 +45,10 @@ OUTPUT FORMAT (JSON only, no markdown):
   "perspectives": [
     {
       "lean": "left | lean_left | center | lean_right | right",
-      "framing": "1-2 sentences describing how sources with this lean frame the story (omit leans with no coverage)"
+      "framing": "1-2 sentences describing how sources with this lean frame the story"
     }
   ],
-  "key_divergence": "1-2 sentences identifying the most significant difference in framing or emphasis between left and right coverage. If all sources agree, write 'All sources reported this story similarly with no significant framing differences.'",
+  "key_divergence": "1-2 sentences on the most significant framing difference, or note if only one source covered it.",
   "genre": "the genre tag from the articles"
 }"""
 
@@ -116,22 +117,84 @@ def synthesize_cluster(cluster: list[dict]) -> dict | None:
         return result
 
     except json.JSONDecodeError as e:
-        print(f"  ✗ JSON parse error: {e}")
+        print(f"  x JSON parse error: {e}")
         return None
     except Exception as e:
-        print(f"  ✗ Synthesis error: {e}")
+        print(f"  x Synthesis error: {e}")
         return None
+
+
+def select_clusters(clusters: list[list[dict]]) -> list[list[dict]]:
+    """
+    Selection strategy:
+    1. Guarantee MIN_STORIES_PER_GENRE for every genre (floor).
+    2. Fill remaining slots with largest unselected clusters regardless of genre —
+       so popular genres like politics/tech naturally get more stories.
+    """
+    by_genre: dict[str, list[list[dict]]] = {g: [] for g in ALL_GENRES}
+    by_genre["general"] = []
+
+    for cluster in clusters:
+        genre = cluster[0].get("genre", "general")
+        if genre in by_genre:
+            by_genre[genre].append(cluster)
+        else:
+            by_genre["general"].append(cluster)
+
+    for genre in by_genre:
+        by_genre[genre].sort(key=lambda c: len(c), reverse=True)
+
+    selected = []
+    selected_ids = set()
+
+    def cluster_id(c):
+        return c[0]["id"]
+
+    # Step 1: guarantee the floor for every genre
+    for genre in ALL_GENRES:
+        picked = 0
+        for cluster in by_genre[genre]:
+            if picked >= MIN_STORIES_PER_GENRE:
+                break
+            cid = cluster_id(cluster)
+            if cid not in selected_ids:
+                selected.append(cluster)
+                selected_ids.add(cid)
+                picked += 1
+
+    # Step 2: fill remaining slots naturally by cluster size —
+    # politics/tech will dominate here because they have the most articles
+    remaining_slots = MAX_CLUSTERS - len(selected)
+    if remaining_slots > 0:
+        all_sorted = sorted(clusters, key=lambda c: len(c), reverse=True)
+        for cluster in all_sorted:
+            if remaining_slots <= 0:
+                break
+            cid = cluster_id(cluster)
+            if cid not in selected_ids:
+                selected.append(cluster)
+                selected_ids.add(cid)
+                remaining_slots -= 1
+
+    return selected
 
 
 def run_synthesis(clusters: list[list[dict]]) -> list[dict]:
-    eligible = [c for c in clusters if len(c) >= MIN_CLUSTER_SIZE]
-    eligible = eligible[:MAX_CLUSTERS]
+    eligible = select_clusters(clusters)
+    print(f"[SYNTHESIZE] Processing {len(eligible)} clusters (genre-balanced)...")
 
-    print(f"[SYNTHESIZE] Processing {len(eligible)} multi-source clusters...")
+    # Print genre breakdown
+    genre_counts: dict[str, int] = {}
+    for c in eligible:
+        g = c[0].get("genre", "general")
+        genre_counts[g] = genre_counts.get(g, 0) + 1
+    for g, count in sorted(genre_counts.items()):
+        print(f"  {g:12s}: {count} clusters")
+
     stories = []
     for i, cluster in enumerate(eligible, 1):
         sources_list = ", ".join(a["source_name"] for a in cluster[:4])
-        print(f"  [{i}/{len(eligible)}] {cluster[0]['title'][:60]}... ({len(cluster)} sources: {sources_list})")
+        print(f"  [{i}/{len(eligible)}] {cluster[0]['title'][:55]}... ({len(cluster)} src: {sources_list})")
         story = synthesize_cluster(cluster)
         if story:
             stories.append(story)
