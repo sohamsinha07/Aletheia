@@ -7,6 +7,7 @@ the same story using cosine similarity + DBSCAN.
 import os
 import numpy as np
 from dotenv import load_dotenv
+import re
 load_dotenv()
 
 EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "local")
@@ -46,16 +47,21 @@ def get_embeddings(texts: list[str]) -> np.ndarray:
         print(f"[EMBED] Using local sentence-transformers for {len(texts)} texts...")
         return embed_local(texts)
     
+def clean_domain(domain: str) -> str:
+    """Strip markdown link corruption like [[reuters.com](https://reuters.com)](https://reuters.com) → [reuters.com](https://reuters.com)"""
+    match = re.match(r'^\[([^\]]+)\]\([^)]+\)$', domain.strip())
+    if match:
+        return match.group(1)
+    return domain.strip()
+
+
 def dedupe_cluster(cluster: list[dict]) -> list[dict]:
-    """
-    Keep only one article per domain per cluster.
-    Prevents Fox News publishing 3 articles on Iran from
-    appearing as a '3 source' cluster when it's really 1 outlet.
-    """
+    """Keep only one article per domain per cluster."""
     seen_domains = set()
     deduped = []
     for article in cluster:
-        domain = article.get("source_domain", article.get("source_name", ""))
+        raw_domain = article.get("source_domain", article.get("source_name", ""))
+        domain = clean_domain(raw_domain)
         if domain not in seen_domains:
             seen_domains.add(domain)
             deduped.append(article)
