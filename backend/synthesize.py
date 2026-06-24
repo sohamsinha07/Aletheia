@@ -125,12 +125,6 @@ def synthesize_cluster(cluster: list[dict]) -> dict | None:
 
 
 def select_clusters(clusters: list[list[dict]]) -> list[list[dict]]:
-    """
-    Selection strategy:
-    1. Guarantee MIN_STORIES_PER_GENRE for every genre (floor).
-    2. Fill remaining slots with largest unselected clusters regardless of genre —
-       so popular genres like politics/tech naturally get more stories.
-    """
     by_genre: dict[str, list[list[dict]]] = {g: [] for g in ALL_GENRES}
     by_genre["general"] = []
 
@@ -141,8 +135,12 @@ def select_clusters(clusters: list[list[dict]]) -> list[list[dict]]:
         else:
             by_genre["general"].append(cluster)
 
+    # Sort each genre bucket: prefer clusters with more unique leans, then size
     for genre in by_genre:
-        by_genre[genre].sort(key=lambda c: len(c), reverse=True)
+        by_genre[genre].sort(
+            key=lambda c: (len(set(a["lean"] for a in c)), len(c)),
+            reverse=True
+        )
 
     selected = []
     selected_ids = set()
@@ -150,7 +148,7 @@ def select_clusters(clusters: list[list[dict]]) -> list[list[dict]]:
     def cluster_id(c):
         return c[0]["id"]
 
-    # Step 1: guarantee the floor for every genre
+    # Step 1: guarantee the floor per genre, picking most diverse clusters first
     for genre in ALL_GENRES:
         picked = 0
         for cluster in by_genre[genre]:
@@ -162,11 +160,14 @@ def select_clusters(clusters: list[list[dict]]) -> list[list[dict]]:
                 selected_ids.add(cid)
                 picked += 1
 
-    # Step 2: fill remaining slots naturally by cluster size —
-    # politics/tech will dominate here because they have the most articles
+    # Step 2: fill remaining slots, still prioritizing lean diversity
     remaining_slots = MAX_CLUSTERS - len(selected)
     if remaining_slots > 0:
-        all_sorted = sorted(clusters, key=lambda c: len(c), reverse=True)
+        all_sorted = sorted(
+            clusters,
+            key=lambda c: (len(set(a["lean"] for a in c)), len(c)),
+            reverse=True
+        )
         for cluster in all_sorted:
             if remaining_slots <= 0:
                 break

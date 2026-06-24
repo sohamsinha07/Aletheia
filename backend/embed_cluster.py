@@ -45,6 +45,26 @@ def get_embeddings(texts: list[str]) -> np.ndarray:
     else:
         print(f"[EMBED] Using local sentence-transformers for {len(texts)} texts...")
         return embed_local(texts)
+    
+def dedupe_cluster(cluster: list[dict]) -> list[dict]:
+    """
+    Keep only one article per domain per cluster.
+    Prevents Fox News publishing 3 articles on Iran from
+    appearing as a '3 source' cluster when it's really 1 outlet.
+    """
+    seen_domains = set()
+    deduped = []
+    for article in cluster:
+        domain = article.get("source_domain", article.get("source_name", ""))
+        if domain not in seen_domains:
+            seen_domains.add(domain)
+            deduped.append(article)
+    return deduped
+
+
+def count_unique_leans(cluster: list[dict]) -> int:
+    """Count how many distinct political leans are in a cluster."""
+    return len(set(a["lean"] for a in cluster))
 
 
 def cluster_articles(articles: list[dict]) -> list[list[dict]]:
@@ -157,6 +177,7 @@ if __name__ == "__main__":
     clusters = tag_genres(clusters)
     print(f"\nTop 5 clusters:")
     for i, cluster in enumerate(clusters[:5]):
-        print(f"\n  Cluster {i+1} ({len(cluster)} articles, genre={cluster[0].get('genre')}):")
+        leans = [a['lean'] for a in cluster]
+        print(f"\n  Cluster {i+1} ({len(cluster)} articles, genre={cluster[0].get('genre')}, leans={leans}):")
         for a in cluster:
             print(f"    [{a['lean']:10s}] {a['source_name']:20s} | {a['title'][:70]}")
